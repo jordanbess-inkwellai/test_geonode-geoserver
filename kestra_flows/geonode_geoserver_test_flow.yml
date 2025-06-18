@@ -1,0 +1,58 @@
+id: geonode_geoserver_tests
+namespace: dev_tests
+
+description: |
+  A Kestra flow to test GeoNode and GeoServer functionality
+  by running a Jupyter notebook with Papermill.
+
+tasks:
+  - id: run_geonode_tests
+    type: io.kestra.core.tasks.flows.WorkingDirectory
+    tasks:
+    - id: papermill_execution
+      type: io.kestra.plugin.scripts.python.Commands
+      # Assuming Kestra environment has Python and Papermill installed
+      # May need a setup script or custom Docker image in a real scenario
+      commands:
+        - pip install papermill # Ensure papermill is available
+        - papermill \
+            ../notebooks/geonode_geoserver_tests.ipynb \
+            ../notebooks/output_geonode_geoserver_tests.ipynb \
+            -p GEONODE_URL "http://localhost:8000" \
+            -p GEOSERVER_URL "http://localhost:8080/geoserver" \
+            -p USERNAME "admin" \
+            -p PASSWORD "geoserver" \
+            -p SAMPLE_SHAPEFILE_PATH "../data/sample_vector.shp" \
+            -p SAMPLE_RASTER_PATH "../data/sample_raster.tif"
+      # The working directory for this task will be the one created by WorkingDirectory
+      # so paths are relative to that.
+
+  # Later, we can add tasks to handle the output notebook,
+  # for example, upload it as an artifact or send a notification.
+
+triggers:
+  # Example: Run manually or on a schedule
+  # - id: manual_trigger
+  #   type: io.kestra.core.models.triggers.types.Schedule
+  #   cron: "0 0 * * *" # Example: daily at midnight
+
+# Input parameters for the flow (optional, can also be passed via task parameters)
+inputs:
+  - name: GEONODE_URL
+    type: STRING
+    defaults: "http://localhost:8000"
+  - name: GEOSERVER_URL
+    type: STRING
+    defaults: "http://localhost:8080/geoserver"
+  - name: USERNAME
+    type: STRING
+    defaults: "admin"
+  - name: PASSWORD
+    type: STRING
+    defaults: "secure_password" # Change in production
+  - name: SAMPLE_SHAPEFILE_PATH
+    type: STRING
+    defaults: "data/sample_vector.shp" # Path relative to repo root or flow execution
+  - name: SAMPLE_RASTER_PATH
+    type: STRING
+    defaults: "data/sample_raster.tif"   # Path relative to repo root or flow execution
