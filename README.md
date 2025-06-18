@@ -1,5 +1,5 @@
 # GeoNode-GeoServer Integration Test Suite
-
+moved to https://github.com/aiinkwell/ecco-geospatialdata_integration_review_analysis-services_fastapi/tree/main/geonode-geoserver-tester
 A comprehensive testing framework for validating GeoNode and GeoServer integration using Kestra workflows and Jupyter notebooks.
 
 ## Overview
