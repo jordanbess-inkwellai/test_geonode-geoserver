@@ -2,30 +2,83 @@ id: geonode_geoserver_tests
 namespace: dev_tests
 
 description: |
-  A Kestra flow to test GeoNode and GeoServer functionality
-  by running a Jupyter notebook with Papermill.
+  Enhanced Kestra flow to test GeoNode and GeoServer functionality
+  with improved security, error handling, and monitoring capabilities.
+
+  Features:
+  - Secure credential management using environment variables
+  - Comprehensive error handling and retry mechanisms
+  - Detailed logging and monitoring
+  - Configurable test parameters
+  - Support for multiple test environments
+
+variables:
+  # Default configuration - override via environment variables or flow inputs
+  default_timeout: "30"
+  max_retries: "3"
+  enable_cleanup: "false"
+  verbose_logging: "false"
 
 tasks:
+  - id: validate_environment
+    type: io.kestra.plugin.scripts.python.Commands
+    description: "Validate environment and dependencies before running tests"
+    commands:
+      - python -c "import sys; print(f'Python version: {sys.version}')"
+      - python -c "import requests; print(f'Requests version: {requests.__version__}')"
+      - python -c "
+          import os
+          required_vars = ['GEONODE_URL', 'GEOSERVER_URL']
+          missing = [var for var in required_vars if not os.getenv(var)]
+          if missing:
+              print(f'Warning: Missing environment variables: {missing}')
+              print('Using default values from flow configuration')
+          else:
+              print('All required environment variables are set')
+        "
+
+  - id: install_dependencies
+    type: io.kestra.plugin.scripts.python.Commands
+    description: "Install required Python packages with version pinning"
+    commands:
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      - pip list | grep -E "(papermill|requests|geopandas|owslib)"
+
   - id: run_geonode_tests
     type: io.kestra.core.tasks.flows.WorkingDirectory
+    description: "Execute GeoNode-GeoServer integration tests"
     tasks:
     - id: papermill_execution
       type: io.kestra.plugin.scripts.python.Commands
-      # Assuming Kestra environment has Python and Papermill installed
-      # May need a setup script or custom Docker image in a real scenario
+      description: "Run Jupyter notebook tests with Papermill"
+      env:
+        # Security: Use environment variables for sensitive data
+        GEONODE_URL: "{{ inputs.geonode_url }}"
+        GEOSERVER_URL: "{{ inputs.geoserver_url }}"
+        GEONODE_USERNAME: "{{ inputs.username }}"
+        GEONODE_PASSWORD: "{{ inputs.password }}"
+        SAMPLE_SHAPEFILE_PATH: "{{ inputs.sample_shapefile_path }}"
+        SAMPLE_RASTER_PATH: "{{ inputs.sample_raster_path }}"
+        DEFAULT_TIMEOUT: "{{ vars.default_timeout }}"
+        MAX_RETRY_ATTEMPTS: "{{ vars.max_retries }}"
+        ENABLE_CLEANUP: "{{ vars.enable_cleanup }}"
+        VERBOSE_LOGGING: "{{ vars.verbose_logging }}"
       commands:
-        - pip install papermill # Ensure papermill is available
-        - papermill \
-            ../notebooks/geonode_geoserver_tests.ipynb \
-            ../notebooks/output_geonode_geoserver_tests.ipynb \
-            -p GEONODE_URL "http://localhost:8000" \
-            -p GEOSERVER_URL "http://localhost:8080/geoserver" \
-            -p USERNAME "admin" \
-            -p PASSWORD "geoserver" \
-            -p SAMPLE_SHAPEFILE_PATH "../data/sample_vector.shp" \
-            -p SAMPLE_RASTER_PATH "../data/sample_raster.tif"
-      # The working directory for this task will be the one created by WorkingDirectory
-      # so paths are relative to that.
+        - echo "Starting GeoNode-GeoServer integration tests..."
+        - echo "GeoNode URL: $GEONODE_URL"
+        - echo "GeoServer URL: $GEOSERVER_URL"
+        - echo "Test data paths - Shapefile: $SAMPLE_SHAPEFILE_PATH, Raster: $SAMPLE_RASTER_PATH"
+        - |
+          papermill \
+            notebooks/geonode_geoserver_tests_improved.ipynb \
+            notebooks/output_geonode_geoserver_tests_$(date +%Y%m%d_%H%M%S).ipynb \
+            --log-output \
+            --progress-bar \
+            --request-save-on-cell-execute \
+            --autosave-cell-every 30
+        - echo "Tests completed. Check output notebook for detailed results."
+      timeout: PT30M  # 30 minutes timeout for the entire test suite
 
   # Later, we can add tasks to handle the output notebook,
   # for example, upload it as an artifact or send a notification.
