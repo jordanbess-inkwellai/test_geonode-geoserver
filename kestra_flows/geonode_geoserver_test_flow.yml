@@ -80,32 +80,106 @@ tasks:
         - echo "Tests completed. Check output notebook for detailed results."
       timeout: PT30M  # 30 minutes timeout for the entire test suite
 
-  # Later, we can add tasks to handle the output notebook,
-  # for example, upload it as an artifact or send a notification.
+  - id: post_test_analysis
+    type: io.kestra.plugin.scripts.python.Commands
+    description: "Analyze test results and generate summary report"
+    commands:
+      - echo "Analyzing test results..."
+      - python -c "
+          import json
+          import glob
+          import os
+          from datetime import datetime
 
+          # Find the latest output notebook
+          output_files = glob.glob('notebooks/output_geonode_geoserver_tests_*.ipynb')
+          if output_files:
+              latest_file = max(output_files, key=os.path.getctime)
+              print(f'Latest test output: {latest_file}')
+
+              # Basic analysis - in a real scenario, you'd parse the notebook
+              # and extract test results from the cells
+              file_size = os.path.getsize(latest_file)
+              print(f'Output file size: {file_size} bytes')
+
+              if file_size > 1000:  # Basic check for non-empty results
+                  print('✓ Test execution appears successful (non-empty output)')
+              else:
+                  print('⚠ Warning: Output file is very small, tests may have failed')
+          else:
+              print('✗ No output files found - test execution may have failed')
+        "
+
+  - id: cleanup_temp_files
+    type: io.kestra.plugin.scripts.python.Commands
+    description: "Clean up temporary files if cleanup is enabled"
+    condition: "{{ vars.enable_cleanup == 'true' }}"
+    commands:
+      - echo "Cleaning up temporary files..."
+      - find . -name "*.tmp" -type f -delete
+      - find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+      - echo "Cleanup completed"
+
+# Triggers for automated execution
 triggers:
-  # Example: Run manually or on a schedule
-  # - id: manual_trigger
-  #   type: io.kestra.core.models.triggers.types.Schedule
-  #   cron: "0 0 * * *" # Example: daily at midnight
+  - id: daily_health_check
+    type: io.kestra.core.models.triggers.types.Schedule
+    cron: "0 6 * * *"  # Daily at 6 AM
+    description: "Daily health check of GeoNode-GeoServer integration"
+    disabled: true  # Enable as needed
 
-# Input parameters for the flow (optional, can also be passed via task parameters)
+  - id: weekly_comprehensive_test
+    type: io.kestra.core.models.triggers.types.Schedule
+    cron: "0 2 * * 1"  # Weekly on Monday at 2 AM
+    description: "Weekly comprehensive test suite"
+    disabled: true  # Enable as needed
+
+# Input parameters for the flow with enhanced validation and security
 inputs:
-  - name: GEONODE_URL
+  - name: geonode_url
     type: STRING
     defaults: "http://localhost:8000"
-  - name: GEOSERVER_URL
+    description: "Base URL of the GeoNode instance"
+    required: false
+
+  - name: geoserver_url
     type: STRING
     defaults: "http://localhost:8080/geoserver"
-  - name: USERNAME
+    description: "Base URL of the GeoServer instance"
+    required: false
+
+  - name: username
     type: STRING
     defaults: "admin"
-  - name: PASSWORD
+    description: "Username for authentication (use environment variables in production)"
+    required: false
+
+  - name: password
     type: STRING
-    defaults: "secure_password" # Change in production
-  - name: SAMPLE_SHAPEFILE_PATH
+    defaults: "geoserver"
+    description: "Password for authentication (use environment variables in production)"
+    required: false
+
+  - name: sample_shapefile_path
     type: STRING
-    defaults: "data/sample_vector.shp" # Path relative to repo root or flow execution
-  - name: SAMPLE_RASTER_PATH
+    defaults: "data/sample_vector.shp"
+    description: "Path to sample shapefile for testing"
+    required: false
+
+  - name: sample_raster_path
     type: STRING
-    defaults: "data/sample_raster.tif"   # Path relative to repo root or flow execution
+    defaults: "data/sample_raster.tif"
+    description: "Path to sample raster file for testing"
+    required: false
+
+  - name: test_environment
+    type: STRING
+    defaults: "development"
+    description: "Test environment identifier (development, staging, production)"
+    required: false
+
+  - name: notification_webhook
+    type: STRING
+    defaults: ""
+    description: "Optional webhook URL for test result notifications"
+    required: false
